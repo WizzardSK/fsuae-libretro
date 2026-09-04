@@ -1,20 +1,38 @@
 name: buildbot preflight
 on: [push, workflow_dispatch]
 
+env:
+  DEPS: build-essential autoconf automake libtool pkg-config gettext libglib2.0-dev libopenal-dev libpng-dev zlib1g-dev
+  BUILD: |
+    ./autogen.sh &&
+    ./configure --enable-shared --disable-static --without-libmpeg2 &&
+    make -f Makefile.libretro gen -j2 &&
+    make -f Makefile.libretro -j2 &&
+    ls -la fsuae_libretro.so &&
+    nm -D --defined-only fsuae_libretro.so | grep " T retro_run" &&
+    ldd fsuae_libretro.so
+
 jobs:
   linux-x64:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - run: |
-          docker run --rm -v "$PWD":/src -w /src ubuntu:focal sh -c '
-            export DEBIAN_FRONTEND=noninteractive &&
-            apt-get update -qy &&
-            apt-get install -qy build-essential autoconf automake libtool pkg-config gettext libglib2.0-dev libopenal-dev libpng-dev zlib1g-dev libgl1-mesa-dev &&
-            ./autogen.sh &&
-            ./configure --enable-shared --disable-static --without-libmpeg2 &&
-            make -f Makefile.libretro gen -j2 &&
-            make -f Makefile.libretro -j2 &&
-            ls -la fsuae_libretro.so &&
-            nm -D --defined-only fsuae_libretro.so | grep " T retro_" | sort &&
-            ldd fsuae_libretro.so'
+          docker run --rm -e DEPS -e BUILD -v "$PWD":/src -w /src ubuntu:xenial sh -c '
+            apt-get update -qy && apt-get install -qy $DEPS && eval "$BUILD"'
+
+  linux-i686:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          docker run --rm --platform linux/386 -e DEPS -e BUILD -v "$PWD":/src -w /src i386/ubuntu:xenial sh -c '
+            apt-get update -qy && apt-get install -qy $DEPS && eval "$BUILD"'
+
+  linux-aarch64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          docker run --rm -e DEPS -e BUILD -e DEBIAN_FRONTEND=noninteractive -v "$PWD":/src -w /src ubuntu:focal sh -c '
+            apt-get update -qy && apt-get install -qy $DEPS && eval "$BUILD"'
